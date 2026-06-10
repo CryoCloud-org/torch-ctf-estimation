@@ -165,6 +165,7 @@ def results_to_output_model(result2d: Defocus2DResults) -> CTFResultsOutput:
         phase_shift_params=phase_shift_params,
         envelope_B=envelope_B,
         cross_correlation_final=cc_final,
+        ctf_fit_resolution_angstroms=result2d.ctf_fit_resolution_angstroms,
     )
 
 

@@ -168,6 +168,13 @@ class Defocus2DResults(BaseModel):
         | None
     ) = None
     phase_shift_trace: list[float] | None = None
+    ctf_fit_resolution_angstroms: float | None = Field(
+        default=None,
+        description=(
+            "Highest resolution (Angstroms) of good CTF fit, carried over from the 1D "
+            "mean-spectrum fit (CTFFind 'Thon rings with good fit up to')."
+        ),
+    )
 
     @field_serializer("*", mode="wrap")  # type: ignore[misc]
     def _serialize_field(
@@ -329,6 +336,16 @@ class Defocus1DResults(BaseModel):
     envelope_B: torch.Tensor | None = None
     test_B_values: torch.Tensor | None = None
     cross_correlations_2d: torch.Tensor | None = None
+    ctf_fit_resolution_angstroms: float | None = Field(
+        default=None,
+        description=(
+            "Highest resolution (Angstroms) to which the fitted CTF agrees with the "
+            "Thon rings, via CTFFind's renormalized windowed-FRC dual-threshold "
+            "criterion. Matches CTFFind's 'Thon rings with good fit up to'."
+        ),
+    )
+    fit_frc: torch.Tensor | None = None
+    fit_frc_frequencies: torch.Tensor | None = None
 
     @field_serializer("*", mode="wrap")  # type: ignore[misc]
     def _serialize_field(

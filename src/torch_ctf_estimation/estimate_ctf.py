@@ -18,6 +18,9 @@ from torch_ctf_estimation.estimate_ctf_2d.estimate_background_2d import (
 from torch_ctf_estimation.estimate_ctf_2d.estimate_ctf_2d_utils import (
     _estimate_defocus_2d_at_1x1,
 )
+from torch_ctf_estimation.metrics.native_ctf_fit import (
+    compute_native_ctf_fit_resolution,
+)
 from torch_ctf_estimation.models import (
     CTFFittingParams,
     Defocus1DResults,
@@ -36,6 +39,66 @@ from torch_ctf_estimation.utils.fitting_bounds import (
 )
 from torch_ctf_estimation.utils.laser_axis_mask import build_laser_axis_mask
 from torch_ctf_estimation.utils.normalize import normalize_image
+
+
+def _attach_fit_resolution(
+    result1d: Defocus1DResults,
+    result2d: Defocus2DResults,
+    *,
+    native_image: torch.Tensor,
+    native_spacing: float,
+    fitting_params: CTFFittingParams,
+    optical_params: OpticalParams,
+) -> tuple[Defocus1DResults, Defocus2DResults]:
+    """
+    Compute the CTFFind-style CTF fit max-resolution once, at the native pixel size.
+
+    Runs the CTFFind5-faithful native-resolution path
+    (:func:`~torch_ctf_estimation.metrics.native_ctf_fit.compute_native_ctf_fit_resolution`):
+    a native-pixel CTF fit (defocus + astigmatism) on the filtered amplitude spectrum,
+    an astigmatism-corrected 1D average (equiphase magnification), then the validated
+    renormalisation + windowed FRC + dual-threshold walk. The 1D fit defocus seeds the
+    native fit. Sets ``ctf_fit_resolution_angstroms`` + ``fit_frc`` (+ frequencies) on
+    result1d and the scalar on result2d. Computed once per micrograph (not per patch).
+
+    Falls back to skipping the metric if the native image is too small for the box.
+    """
+    use_whole_image = fitting_params.patch_sidelength < 0
+    _t, h, w = native_image.shape
+    box = min(h, w) if use_whole_image else fitting_params.patch_sidelength
+    if h < box or w < box:
+        return result1d, result2d  # native image too small; skip metric
+
+    d = result1d.ctf_model.defocus_um
+    seed_defocus_um = float(d.cpu().item()) if isinstance(d, torch.Tensor) else float(d)
+    if result2d.phase_shift_degrees is not None:
+        phase_deg = float(result2d.phase_shift_degrees)
+    else:
+        p = result1d.ctf_model.phase_shift_degrees
+        phase_deg = float(p.cpu().item()) if isinstance(p, torch.Tensor) else float(p)
+
+    fit, fit_res = compute_native_ctf_fit_resolution(
+        native_image,
+        pixel_spacing_angstroms=native_spacing,
+        voltage_kev=optical_params.voltage_kev,
+        spherical_aberration_mm=optical_params.spherical_aberration_mm,
+        amplitude_contrast=optical_params.amplitude_contrast_fraction,
+        frequency_fit_range_angstroms=fitting_params.frequency_fit_range_angstroms,
+        initial_defocus_um=seed_defocus_um,
+        box=box,
+        phase_shift_deg=phase_deg,
+    )
+    result1d = result1d.model_copy(
+        update={
+            "ctf_fit_resolution_angstroms": fit_res.resolution_angstroms,
+            "fit_frc": fit_res.fit_frc,
+            "fit_frc_frequencies": fit_res.frc_frequencies,
+        }
+    )
+    result2d = result2d.model_copy(
+        update={"ctf_fit_resolution_angstroms": fit_res.resolution_angstroms}
+    )
+    return result1d, result2d
 
 
 def estimate_ctf(
@@ -87,6 +150,11 @@ def estimate_ctf(
     image, _ = einops.pack([image], pattern="* h w")
 
     image = normalize_image(image)
+    # Keep the normalized image at its native pixel size for the resolution metric:
+    # the fit downsamples to >=3 A (capping Nyquist at 6 A), but the CTFFind-style
+    # max-resolution metric must run at the native Nyquist to be comparable.
+    native_image = image
+    native_spacing = optical_params.pixel_spacing_angstroms
     new_spacing = max(3.0, optical_params.pixel_spacing_angstroms)
     image, _ = fourier_rescale_2d(
         image=image,
@@ -335,6 +403,14 @@ def estimate_ctf(
             result2d = result2d.model_copy(
                 update={"phase_shift_degrees": phase_shift_deg}
             )
+        result1d, result2d = _attach_fit_resolution(
+            result1d,
+            result2d,
+            native_image=native_image,
+            native_spacing=native_spacing,
+            fitting_params=fitting_params,
+            optical_params=optical_params,
+        )
         if results_path is not None:
             write_results_json(result2d, results_path)
         return mean_ps, result1d, result2d
@@ -424,6 +500,14 @@ def estimate_ctf(
         )
     if not optimize_phase_1d:
         result2d = result2d.model_copy(update={"phase_shift_degrees": phase_shift_deg})
+    result1d, result2d = _attach_fit_resolution(
+        result1d,
+        result2d,
+        native_image=native_image,
+        native_spacing=native_spacing,
+        fitting_params=fitting_params,
+        optical_params=optical_params,
+    )
     # Optionally write defocus, phase shift, B envelope to JSON
     if results_path is not None:
         write_results_json(result2d, results_path)

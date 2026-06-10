@@ -78,3 +78,4 @@ class CTFResultsOutput(BaseModelTeamTomo):
     phase_shift_params: PhaseShiftParamsOutput | None = None
     envelope_B: float | None = None
     cross_correlation_final: float | None = None
+    ctf_fit_resolution_angstroms: float | None = None
