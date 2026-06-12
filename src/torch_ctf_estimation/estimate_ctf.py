@@ -87,7 +87,7 @@ def estimate_ctf(
     image, _ = einops.pack([image], pattern="* h w")
 
     image = normalize_image(image)
-    new_spacing = max(3.0, optical_params.pixel_spacing_angstroms)
+    new_spacing = max(fitting_params.min_fit_pixel_spacing_angstroms, optical_params.pixel_spacing_angstroms)
     image, _ = fourier_rescale_2d(
         image=image,
         source_spacing=optical_params.pixel_spacing_angstroms,

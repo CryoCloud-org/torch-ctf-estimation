@@ -55,6 +55,7 @@ class CTFFittingParams(BaseModel):
     initial_phase_shift: float = 0.0
     mask_laser_axis: bool = False
     laser_axis_mask_width: float = 0.1
+    min_fit_pixel_spacing_angstroms: float = 3.0
 
 
 class LaserParams(BaseModel):
