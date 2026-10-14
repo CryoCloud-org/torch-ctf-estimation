@@ -462,3 +462,46 @@ def test_estimate_ctf_mask_laser_axis_without_lpp_model():
     )
     assert result2d.defocus_model_type == "grid"
     assert result2d.defocus_model.data.shape[1:] == (1, 2, 2)
+
+
+@pytest.mark.parametrize("defocus_model", ["grid", "linear"])
+def test_estimate_ctf_recovers_astigmatism(defocus_model):
+    """defocus_u - defocus_v is twice torch_ctf's half-difference astigmatism."""
+    from torch_ctf import calculate_ctf_2d
+
+    size, pixel_size = 1024, 1.5
+    defocus_u, defocus_v, angle = 1.6, 1.4, 30.0  # µm, µm, degrees
+    ctf = calculate_ctf_2d(
+        defocus=(defocus_u + defocus_v) / 2,
+        astigmatism=(defocus_u - defocus_v) / 2,
+        astigmatism_angle=angle,
+        voltage=300.0,
+        spherical_aberration=2.7,
+        amplitude_contrast=0.1,
+        phase_shift=0.0,
+        pixel_size=pixel_size,
+        image_shape=(size, size),
+        rfft=True,
+        fftshift=False,
+    )
+    generator = torch.Generator().manual_seed(0)
+    noise = torch.randn(size, size, generator=generator)
+    image = torch.fft.irfft2(torch.fft.rfft2(noise) * ctf, s=(size, size))
+    image = image + 0.1 * torch.randn(size, size, generator=generator)
+    fitting = default_fitting_params(
+        defocus_grid_resolution=(1, 2, 2),
+        patch_sidelength=256,
+        defocus_model=defocus_model,
+    )
+    _mean_ps, _result1d, result2d = estimate_ctf(
+        image,
+        default_optical_params(pixel_spacing_angstroms=pixel_size),
+        fitting,
+        device=torch.device("cpu"),
+    )
+    assert result2d.defocus_u - result2d.defocus_v == pytest.approx(
+        defocus_u - defocus_v, abs=0.03
+    )
+    assert (result2d.defocus_u + result2d.defocus_v) / 2 == pytest.approx(
+        (defocus_u + defocus_v) / 2, abs=0.03
+    )

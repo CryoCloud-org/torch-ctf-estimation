@@ -139,8 +139,9 @@ def _grid_final_scalars(
     final_astigmatism_angle = _astig_angle_to_m90_p90(_fa_deg)
     final_envelope_B = float(envelope_B.detach().cpu().item())
     mean_defocus = float(defocus_model_obj.data.detach().cpu().mean().item())
-    final_defocus_u = mean_defocus + final_astigmatism / 2.0
-    final_defocus_v = mean_defocus - final_astigmatism / 2.0
+    # astigmatism is torch_ctf's half-difference, (defocus_u - defocus_v) / 2.
+    final_defocus_u = mean_defocus + final_astigmatism
+    final_defocus_v = mean_defocus - final_astigmatism
     return (
         final_astigmatism,
         final_astigmatism_angle,

@@ -167,8 +167,8 @@ def _defocus_field_from_1d_fits(
             astigmatism=astig,
             astigmatism_angle=result_1x1.astigmatism_angle or 0.0,
             envelope_B=envelope_B,
-            defocus_u=mean_defocus + astig / 2.0,
-            defocus_v=mean_defocus - astig / 2.0,
+            defocus_u=mean_defocus + astig,
+            defocus_v=mean_defocus - astig,
         )
     # grid: fit 3D spline to (positions, defocus_flat)
     grid_data = (
@@ -192,6 +192,6 @@ def _defocus_field_from_1d_fits(
         astigmatism=astig,
         astigmatism_angle=result_1x1.astigmatism_angle or 0.0,
         envelope_B=envelope_B,
-        defocus_u=mean_defocus + astig / 2.0,
-        defocus_v=mean_defocus - astig / 2.0,
+        defocus_u=mean_defocus + astig,
+        defocus_v=mean_defocus - astig,
     )

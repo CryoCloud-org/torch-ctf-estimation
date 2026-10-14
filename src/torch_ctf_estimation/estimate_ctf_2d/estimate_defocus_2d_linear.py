@@ -348,8 +348,9 @@ def _linear_final_scalars(
         else:
             assert params.defocus_0_fixed is not None
             mean_defocus = float(params.defocus_0_fixed)
-    final_defocus_u = mean_defocus + final_astigmatism / 2.0
-    final_defocus_v = mean_defocus - final_astigmatism / 2.0
+    # astigmatism is torch_ctf's half-difference, (defocus_u - defocus_v) / 2.
+    final_defocus_u = mean_defocus + final_astigmatism
+    final_defocus_v = mean_defocus - final_astigmatism
     return (
         final_defocus_0,
         final_grad_mag,
